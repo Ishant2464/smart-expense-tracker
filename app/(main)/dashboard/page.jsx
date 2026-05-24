@@ -69,14 +69,14 @@ export default function Dashboard() {
                 <div className="text-2xl font-bold">
                   {balances?.totalBalance > 0 ? (
                     <span className="text-green-600">
-                      +${balances?.totalBalance.toFixed(2)}
+                      +Rs. {balances?.totalBalance.toFixed(2)}
                     </span>
                   ) : balances?.totalBalance < 0 ? (
                     <span className="text-red-600">
-                      -${Math.abs(balances?.totalBalance).toFixed(2)}
+                      -Rs. {Math.abs(balances?.totalBalance).toFixed(2)}
                     </span>
                   ) : (
-                    <span>$0.00</span>
+                    <span>Rs. 0.00</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -97,7 +97,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  ${balances?.youAreOwed.toFixed(2)}
+                  Rs. {balances?.youAreOwed.toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   From {balances?.oweDetails?.youAreOwedBy?.length || 0} people
@@ -115,7 +115,7 @@ export default function Dashboard() {
                 {balances?.oweDetails?.youOwe?.length > 0 ? (
                   <>
                     <div className="text-2xl font-bold text-red-600">
-                      ${balances?.youOwe.toFixed(2)}
+                      Rs. {balances?.youOwe.toFixed(2)}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       To {balances?.oweDetails?.youOwe?.length || 0} people
@@ -123,7 +123,7 @@ export default function Dashboard() {
                   </>
                 ) : (
                   <>
-                    <div className="text-2xl font-bold">$0.00</div>
+                    <div className="text-2xl font-bold">Rs. 0.00</div>
                     <p className="text-xs text-muted-foreground mt-1">
                       You don't owe anyone
                     </p>

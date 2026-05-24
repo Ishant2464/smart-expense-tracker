@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <rect width="400" height="300" fill="#f0f9ff"/>
+  <circle cx="200" cy="150" r="80" fill="#16a34a" opacity="0.3"/>
+  <circle cx="200" cy="150" r="60" fill="#16a34a" opacity="0.5"/>
+  <text x="200" y="160" font-size="24" text-anchor="middle" fill="#16a34a">Hero Image</text>
+</svg>

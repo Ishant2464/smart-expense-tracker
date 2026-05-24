@@ -7,9 +7,12 @@ export default defineSchema({
     email: v.string(),
     tokenIdentifier: v.string(),
     imageUrl: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    defaultWhatsAppGroupId: v.optional(v.id("groups")),
   })
     .index("by_token", ["tokenIdentifier"])
     .index("by_email", ["email"])
+    .index("by_phone", ["phone"])
     .searchIndex("search_name", { searchField: "name" })
     .searchIndex("search_email", { searchField: "email" }),
 
@@ -64,4 +67,23 @@ export default defineSchema({
       })
     ),
   }),
+
+  chatThreads: defineTable({
+    userId: v.id("users"),
+    title: v.string(),
+    lastMessageAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_recent", ["userId", "lastMessageAt"]),
+
+  chatMessages: defineTable({
+    threadId: v.id("chatThreads"),
+    role: v.string(),
+    content: v.string(),
+    toolName: v.optional(v.string()),
+    toolArgs: v.optional(v.string()),
+    toolResult: v.optional(v.string()),
+    timestamp: v.number(),
+  }).index("by_thread", ["threadId", "timestamp"]),
 });

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 export const store = mutation({
@@ -106,3 +106,94 @@ export const searchUsers = query({
       }));
   },
 });
+
+export const updatePhone = mutation({
+  args: {
+    phone: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await ctx.runQuery(internal.users.getCurrentUser);
+    const phone = normalizePhone(args.phone);
+
+    if (!isValidPhone(phone)) {
+      throw new Error("Phone number must start with + and include at least 10 digits.");
+    }
+
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
+      .unique();
+
+    if (existingUser && existingUser._id !== currentUser._id) {
+      throw new Error("This phone number is already linked to another account.");
+    }
+
+    await ctx.db.patch(currentUser._id, { phone });
+
+    return { success: true };
+  },
+});
+
+export const removePhone = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const currentUser = await ctx.runQuery(internal.users.getCurrentUser);
+
+    await ctx.db.patch(currentUser._id, {
+      phone: undefined,
+      defaultWhatsAppGroupId: undefined,
+    });
+
+    return { success: true };
+  },
+});
+
+export const updateDefaultWhatsAppGroup = mutation({
+  args: {
+    groupId: v.optional(v.id("groups")),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await ctx.runQuery(internal.users.getCurrentUser);
+
+    if (args.groupId) {
+      const group = await ctx.db.get(args.groupId);
+      if (!group) throw new Error("Group not found");
+
+      const isMember = group.members.some(
+        (member) => member.userId === currentUser._id
+      );
+      if (!isMember) {
+        throw new Error("You are not a member of this group.");
+      }
+    }
+
+    await ctx.db.patch(currentUser._id, {
+      defaultWhatsAppGroupId: args.groupId,
+    });
+
+    return { success: true };
+  },
+});
+
+export const getUserByPhone = internalQuery({
+  args: {
+    phone: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const phone = normalizePhone(args.phone);
+
+    return await ctx.db
+      .query("users")
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
+      .unique();
+  },
+});
+
+function normalizePhone(phone) {
+  return phone.replace(/\s+/g, "").trim();
+}
+
+function isValidPhone(phone) {
+  const digitCount = phone.replace(/\D/g, "").length;
+  return phone.startsWith("+") && digitCount >= 10;
+}
