@@ -18,11 +18,16 @@ export function useStoreUser() {
     if (!isAuthenticated) {
       return;
     }
-    // Store the user in the database.
-    // Recall that `storeUser` gets the user information via the `auth`
-    // object on the server. You don't need to pass anything manually here.
+    // Store the user in the database after Convex auth is ready.
     async function createUser() {
-      const id = await storeUser();
+      const id = await storeUser({
+        name: user?.fullName || user?.username || undefined,
+        email:
+          user?.primaryEmailAddress?.emailAddress ||
+          user?.emailAddresses?.[0]?.emailAddress ||
+          undefined,
+        imageUrl: user?.imageUrl || undefined,
+      });
       setUserId(id);
     }
     createUser();

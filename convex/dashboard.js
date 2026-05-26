@@ -7,17 +7,14 @@ export const getUserBalances = query({
     // Use the existing getCurrentUser function instead of repeating auth logic
     const user = await ctx.runQuery(internal.users.getCurrentUser);
 
-    /* ───────────── 1‑to‑1 expenses (no groupId) ───────────── */
+    /* ───────────── all expenses involving the user ───────────── */
     const expenses = (await ctx.db.query("expenses").collect()).filter(
       (e) =>
-        !e.groupId && // 1‑to‑1 only
         (e.paidByUserId === user._id ||
           e.splits.some((s) => s.userId === user._id))
     );
 
     /* tallies */
-    let youOwe = 0;
-    let youAreOwed = 0;
     const balanceByUser = {};
 
     for (const e of expenses) {
@@ -27,30 +24,25 @@ export const getUserBalances = query({
       if (isPayer) {
         for (const s of e.splits) {
           if (s.userId === user._id || s.paid) continue;
-          youAreOwed += s.amount;
           (balanceByUser[s.userId] ??= { owed: 0, owing: 0 }).owed += s.amount;
         }
       } else if (mySplit && !mySplit.paid) {
-        youOwe += mySplit.amount;
         (balanceByUser[e.paidByUserId] ??= { owed: 0, owing: 0 }).owing +=
           mySplit.amount;
       }
     }
 
-    /* ───────────── 1‑to‑1 settlements (no groupId) ───────────── */
+    /* ───────────── all settlements involving the user ───────────── */
     const settlements = (await ctx.db.query("settlements").collect()).filter(
       (s) =>
-        !s.groupId &&
         (s.paidByUserId === user._id || s.receivedByUserId === user._id)
     );
 
     for (const s of settlements) {
       if (s.paidByUserId === user._id) {
-        youOwe -= s.amount;
         (balanceByUser[s.receivedByUserId] ??= { owed: 0, owing: 0 }).owing -=
           s.amount;
       } else {
-        youAreOwed -= s.amount;
         (balanceByUser[s.paidByUserId] ??= { owed: 0, owing: 0 }).owed -=
           s.amount;
       }
@@ -61,7 +53,7 @@ export const getUserBalances = query({
     const youAreOwedByList = [];
     for (const [uid, { owed, owing }] of Object.entries(balanceByUser)) {
       const net = owed - owing;
-      if (net === 0) continue;
+      if (Math.abs(net) <= 0.01) continue;
       const counterpart = await ctx.db.get(uid);
       const base = {
         userId: uid,
@@ -74,6 +66,12 @@ export const getUserBalances = query({
 
     youOweList.sort((a, b) => b.amount - a.amount);
     youAreOwedByList.sort((a, b) => b.amount - a.amount);
+
+    const youOwe = youOweList.reduce((sum, item) => sum + item.amount, 0);
+    const youAreOwed = youAreOwedByList.reduce(
+      (sum, item) => sum + item.amount,
+      0
+    );
 
     return {
       youOwe,

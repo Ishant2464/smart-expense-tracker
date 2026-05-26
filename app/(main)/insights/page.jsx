@@ -411,7 +411,7 @@ function renderBoldSegments(line) {
 }
 
 function formatCurrency(amount) {
-  return `Rs. ${Number(amount ?? 0).toFixed(2)}`;
+  return `₹${Number(amount ?? 0).toFixed(2)}`;
 }
 
 function formatPercent(value) {

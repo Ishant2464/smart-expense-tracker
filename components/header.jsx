@@ -2,17 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { Button } from "./ui/button";
-import { LayoutDashboard, Settings, TrendingUp } from "lucide-react";
+import { LayoutDashboard, ReceiptText, Settings, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
-import { useStoreUser } from "@/hooks/use-store-user";
-import { BarLoader } from "react-spinners";
 import { Authenticated, Unauthenticated } from "convex/react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 export default function Header() {
-  const { isLoading } = useStoreUser();
   const path = usePathname();
   const [isHome, setIsHome] = useState(false);
 
@@ -25,7 +22,7 @@ export default function Header() {
       <nav className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
           <Image
-            src={"/logos/logo.svg"}
+            src={"/logos/logo.png"}
             alt="Splitr Logo"
             width={200}
             height={60}
@@ -62,6 +59,19 @@ export default function Header() {
               </Button>
               <Button variant="ghost" className="md:hidden w-10 h-10 p-0">
                 <LayoutDashboard className="h-4 w-4" />
+              </Button>
+            </Link>
+
+            <Link href="/expenses">
+              <Button
+                variant="outline"
+                className="hidden md:inline-flex items-center gap-2 hover:text-green-600 hover:border-green-600 transition"
+              >
+                <ReceiptText className="h-4 w-4" />
+                Expenses
+              </Button>
+              <Button variant="ghost" className="md:hidden w-10 h-10 p-0">
+                <ReceiptText className="h-4 w-4" />
               </Button>
             </Link>
 
@@ -116,7 +126,6 @@ export default function Header() {
           </Unauthenticated>
         </div>
       </nav>
-      {isLoading && <BarLoader width={"100%"} color="#36d7b7" />}
     </header>
   );
 }

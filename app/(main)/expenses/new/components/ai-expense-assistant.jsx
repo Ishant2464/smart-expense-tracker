@@ -41,7 +41,7 @@ export function AiExpenseAssistant({ type = "individual", onSuccess }) {
 
   const parseExpense = useAction(api.ai.parseNaturalLanguageExpense);
   const parseReceiptImage = useAction(api.ai.parseReceiptImage);
-  const generateUploadUrl = useConvexMutation(api.ai.generateUploadUrl);
+  const generateUploadUrl = useConvexMutation(api.storage.generateUploadUrl);
   const createExpense = useConvexMutation(api.expenses.createExpense);
   const { data: currentUser } = useConvexQuery(api.users.getCurrentUser);
   const fileInputRef = useRef(null);
@@ -369,7 +369,7 @@ function ReceiptExtractionPanel({
           {result?.extracted && (
             <div className="space-y-1 text-sm">
               <p className="font-medium">
-                {result.extracted.description} - Rs.{" "}
+                {result.extracted.description} - ₹
                 {formatMoney(result.extracted.amount)}
               </p>
               <p className="text-muted-foreground">
@@ -401,7 +401,7 @@ function ReceiptExtractionPanel({
                   >
                     <span className="truncate">{item.name}</span>
                     <span className="font-medium">
-                      Rs. {formatMoney(item.amount)}
+                      ₹{formatMoney(item.amount)}
                     </span>
                   </div>
                 ))}
@@ -479,7 +479,7 @@ function AiExpensePreview({ result, onCreate, canCreate, isCreating }) {
             <PreviewRow label="Description" value={preview.description} />
             <PreviewRow
               label="Amount"
-              value={`Rs. ${preview.amount.toFixed(2)}`}
+              value={`₹${preview.amount.toFixed(2)}`}
             />
             <PreviewRow
               label="Date"
@@ -532,7 +532,7 @@ function AiExpensePreview({ result, onCreate, canCreate, isCreating }) {
                           <Badge
                             variant={split.paid ? "outline" : "secondary"}
                           >
-                            Rs. {split.amount.toFixed(2)}
+                            ₹{split.amount.toFixed(2)}
                           </Badge>
                         )}
                       </div>

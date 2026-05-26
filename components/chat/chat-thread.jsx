@@ -53,7 +53,7 @@ export function ChatThread({ threadId, onBack, onDeleteThread }) {
         toast.error(result.error || "Splitr AI could not respond.");
       }
     } catch (error) {
-      toast.error("Failed to send message: " + error.message);
+      toast.error(getFriendlyChatError(error));
     } finally {
       setIsSending(false);
     }
@@ -164,4 +164,14 @@ export function ChatThread({ threadId, onBack, onDeleteThread }) {
       </form>
     </div>
   );
+}
+
+function getFriendlyChatError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/429|quota|too many requests|rate[- ]?limit/i.test(message)) {
+    return "Groq is temporarily rate limited. Please try Splitr AI again shortly.";
+  }
+
+  return "Splitr AI could not send that message. Please try again.";
 }

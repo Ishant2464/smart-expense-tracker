@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { v } from "convex/values";
 import { action, internalQuery, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { generateGroqText } from "./aiProviders.js";
 
 export const getUserInsightsData = query({
   args: {},
@@ -49,10 +49,10 @@ Provide insights in these sections:
 **Saving Opportunities**
 **Forecast & Recommendations**
 
-Be concise, friendly, and actionable. Use Rs. for currency. Do not use HTML.
+Be concise, friendly, and actionable. Use ₹ for currency. Do not use HTML.
     `.trim();
 
-    const summary = await generateGeminiText(prompt);
+    const summary = await generateGroqText(prompt);
 
     return {
       success: true,
@@ -295,21 +295,3 @@ function roundCurrency(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
 
-async function generateGeminiText(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured.");
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-
-  if (typeof result.response.text === "function") {
-    return result.response.text();
-  }
-
-  return (
-    result.response.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? "")
-      .join("") ?? ""
-  );
-}

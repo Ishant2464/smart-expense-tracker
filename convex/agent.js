@@ -1,10 +1,10 @@
 "use node";
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { TOOL_DEFINITIONS, executeToolCall } from "./agentTools.js";
+import { generateGroqText } from "./aiProviders.js";
 
 const MAX_TOOL_CALLS = 5;
 const HISTORY_LIMIT = 20;
@@ -37,57 +37,74 @@ export const sendMessage = action({
 
     const toolCalls = [];
 
-    for (let i = 0; i < MAX_TOOL_CALLS; i++) {
-      const messages = await getRecentMessages(ctx, args.threadId);
-      const prompt = buildAgentPrompt({
-        currentUser,
-        messages,
-      });
-      const modelText = await generateGeminiText(prompt);
-      const toolCall = parseToolCall(modelText);
+    try {
+      for (let i = 0; i < MAX_TOOL_CALLS; i++) {
+        const messages = await getRecentMessages(ctx, args.threadId);
+        const prompt = buildAgentPrompt({
+          currentUser,
+          messages,
+        });
+        const modelText = await generateGroqText(prompt);
+        const toolCall = parseToolCall(modelText);
 
-      if (!toolCall) {
-        const assistantMessage = cleanAssistantText(modelText);
+        if (!toolCall) {
+          const assistantMessage = cleanAssistantText(modelText);
+
+          await ctx.runMutation(api.chat.addMessage, {
+            threadId: args.threadId,
+            role: "assistant",
+            content: assistantMessage,
+          });
+
+          return {
+            success: true,
+            assistantMessage,
+            toolCalls,
+          };
+        }
+
+        const toolArgs = normalizeToolArguments(toolCall.arguments);
 
         await ctx.runMutation(api.chat.addMessage, {
           threadId: args.threadId,
-          role: "assistant",
-          content: assistantMessage,
+          role: "tool_call",
+          content: `Calling ${toolCall.name}`,
+          toolName: toolCall.name,
+          toolArgs: safeJsonStringify(toolArgs),
         });
 
-        return {
-          success: true,
-          assistantMessage,
-          toolCalls,
-        };
+        const result = await executeToolCall(ctx, toolCall.name, toolArgs);
+        const resultSummary = summarizeToolResult(toolCall.name, result);
+
+        await ctx.runMutation(api.chat.addMessage, {
+          threadId: args.threadId,
+          role: "tool_result",
+          content: resultSummary,
+          toolName: toolCall.name,
+          toolResult: safeJsonStringify(result),
+        });
+
+        toolCalls.push({
+          name: toolCall.name,
+          args: toolArgs,
+          result,
+        });
       }
-
-      const toolArgs = normalizeToolArguments(toolCall.arguments);
-
-      await ctx.runMutation(api.chat.addMessage, {
-        threadId: args.threadId,
-        role: "tool_call",
-        content: `Calling ${toolCall.name}`,
-        toolName: toolCall.name,
-        toolArgs: safeJsonStringify(toolArgs),
-      });
-
-      const result = await executeToolCall(ctx, toolCall.name, toolArgs);
-      const resultSummary = summarizeToolResult(toolCall.name, result);
+    } catch (error) {
+      const assistantMessage = getAssistantErrorMessage(error);
 
       await ctx.runMutation(api.chat.addMessage, {
         threadId: args.threadId,
-        role: "tool_result",
-        content: resultSummary,
-        toolName: toolCall.name,
-        toolResult: safeJsonStringify(result),
+        role: "assistant",
+        content: assistantMessage,
       });
 
-      toolCalls.push({
-        name: toolCall.name,
-        args: toolArgs,
-        result,
-      });
+      return {
+        success: false,
+        error: assistantMessage,
+        assistantMessage,
+        toolCalls,
+      };
     }
 
     const assistantMessage =
@@ -141,8 +158,10 @@ Tool rules:
 - Use tools for real balances, expenses, groups, reminders, and expense creation.
 - For adding an expense, use addExpense with a natural language description. If creation requires confirmation, explain that clearly.
 - For multi-step requests, call tools one at a time until you have enough information.
-- Be concise and helpful. Format currency as Rs. amounts. Use ${currentUser.name}'s name naturally.
+- Be concise and helpful. Format currency as ₹ amounts. Use ${currentUser.name}'s name naturally.
 - Never claim an expense, settlement, email, or reminder was completed unless the tool result says it succeeded.
+- Never invent people, groups, balances, or expenses. If a tool result does not contain enough detail, call another tool or say you do not have that detail.
+- If a fresh tool result conflicts with an earlier assistant message, trust the fresh tool result and correct the earlier answer.
 
 Conversation:
 ${formatMessagesForPrompt(messages)}
@@ -165,28 +184,6 @@ function formatMessagesForPrompt(messages) {
       return `${message.role.toUpperCase()}: ${message.content}`;
     })
     .join("\n");
-}
-
-async function generateGeminiText(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured.");
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-
-  if (typeof result.response.text === "function") {
-    return result.response.text();
-  }
-
-  return (
-    result.response.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? "")
-      .join("") ?? ""
-  );
 }
 
 function parseToolCall(modelText) {
@@ -232,6 +229,24 @@ function cleanAssistantText(text) {
   return cleaned || "I could not generate a response. Please try again.";
 }
 
+function getAssistantErrorMessage(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const retryDelayMatch = message.match(/retry(?:Delay)?["']?\s*:?\s*["']?(\d+(?:\.\d+)?)s?/i);
+  const retryText = retryDelayMatch
+    ? ` Try again in about ${Math.ceil(Number(retryDelayMatch[1]))} seconds.`
+    : " Try again in a minute.";
+
+  if (/429|quota|too many requests|rate[- ]?limit/i.test(message)) {
+    return `Groq is temporarily rate limited for Splitr AI.${retryText}`;
+  }
+
+  if (/api key|permission|billing|unauthorized|forbidden/i.test(message)) {
+    return "Splitr AI could not authenticate with Groq. Please check GROQ_API_KEY and model access.";
+  }
+
+  return "Splitr AI could not respond right now. Please try again shortly.";
+}
+
 function normalizeToolArguments(toolArgs) {
   if (!toolArgs || typeof toolArgs !== "object" || Array.isArray(toolArgs)) {
     return {};
@@ -265,7 +280,17 @@ function summarizeToolResult(toolName, result) {
   }
 
   if (toolName === "getGroupDetails") {
-    return `Group ${result.data.group.name}: ${result.data.members.length} members, ${result.data.recentExpenses.length} recent expenses, ${result.data.settlementCount} settlements.`;
+    const members = result.data.members
+      .map((member) => `${member.name} (${member.role})`)
+      .join(", ");
+    const balances = result.data.balances
+      .map(
+        (balance) =>
+          `${balance.name}: net ${formatCurrency(balance.totalBalance)}`
+      )
+      .join(", ");
+
+    return `Group ${result.data.group.name}: ${result.data.members.length} members: ${members}. Balances: ${balances}. ${result.data.recentExpenses.length} recent expenses, ${result.data.settlementCount} settlements.`;
   }
 
   if (toolName === "getRecentExpenses") {
@@ -304,5 +329,5 @@ function safeJsonStringify(value) {
 function formatCurrency(amount) {
   const number = Number(amount);
   const safeNumber = Number.isFinite(number) ? number : 0;
-  return `Rs. ${safeNumber.toFixed(2)}`;
+  return `₹${safeNumber.toFixed(2)}`;
 }

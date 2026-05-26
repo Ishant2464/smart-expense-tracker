@@ -66,6 +66,53 @@ export const createExpense = mutation({
   },
 });
 
+export const getMyExpenses = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await ctx.runQuery(internal.users.getCurrentUser);
+    const allExpenses = await ctx.db
+      .query("expenses")
+      .withIndex("by_date")
+      .order("desc")
+      .collect();
+    const expenses = allExpenses.filter(
+      (expense) =>
+        expense.paidByUserId === user._id ||
+        expense.splits.some((split) => split.userId === user._id)
+    );
+    const userLookupMap = {};
+    const groupLookupMap = {};
+
+    for (const expense of expenses) {
+      await addUserToLookup(ctx, userLookupMap, expense.paidByUserId);
+
+      for (const split of expense.splits) {
+        await addUserToLookup(ctx, userLookupMap, split.userId);
+      }
+
+      if (expense.groupId && !groupLookupMap[expense.groupId]) {
+        const group = await ctx.db.get(expense.groupId);
+        if (group) {
+          groupLookupMap[expense.groupId] = {
+            id: group._id,
+            name: group.name,
+          };
+        }
+      }
+    }
+
+    return {
+      expenses: expenses.map((expense) => ({
+        ...expense,
+        groupName: expense.groupId
+          ? groupLookupMap[expense.groupId]?.name ?? "Group"
+          : null,
+      })),
+      userLookupMap,
+    };
+  },
+});
+
 // ----------- Expenses Page -----------
 
 // Get expenses between current user and a specific person
@@ -166,6 +213,20 @@ export const getExpensesBetweenUsers = query({
     };
   },
 });
+
+async function addUserToLookup(ctx, userLookupMap, userId) {
+  if (userLookupMap[userId]) return;
+
+  const user = await ctx.db.get(userId);
+  if (!user) return;
+
+  userLookupMap[userId] = {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    imageUrl: user.imageUrl,
+  };
+}
 
 // Delete an expense
 export const deleteExpense = mutation({

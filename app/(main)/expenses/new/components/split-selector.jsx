@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,26 @@ export function SplitSelector({
   const [totalPercentage, setTotalPercentage] = useState(0);
   const [totalAmount, setTotalAmount] = useState(0);
 
+  const applySplits = useCallback((nextSplits) => {
+    setSplits(nextSplits);
+
+    const nextTotalAmount = nextSplits.reduce(
+      (sum, split) => sum + split.amount,
+      0
+    );
+    const nextTotalPercentage = nextSplits.reduce(
+      (sum, split) => sum + split.percentage,
+      0
+    );
+
+    setTotalAmount(nextTotalAmount);
+    setTotalPercentage(nextTotalPercentage);
+
+    if (onSplitsChange) {
+      onSplitsChange(nextSplits);
+    }
+  }, [onSplitsChange]);
+
   // Calculate splits when inputs change
   useEffect(() => {
     if (!amount || amount <= 0 || participants.length === 0) {
@@ -28,133 +48,108 @@ export function SplitSelector({
 
     if (type === "equal") {
       // Equal splits
-      const shareAmount = amount / participants.length;
-      newSplits = participants.map((participant) => ({
+      const shareAmounts = distributeAmount(amount, participants.length);
+      newSplits = participants.map((participant, index) => ({
         userId: participant.id,
         name: participant.name,
         email: participant.email,
         imageUrl: participant.imageUrl,
-        amount: shareAmount,
-        percentage: 100 / participants.length,
+        amount: shareAmounts[index],
+        percentage: amount > 0 ? (shareAmounts[index] / amount) * 100 : 0,
         paid: participant.id === paidByUserId,
       }));
     } else if (type === "percentage") {
       // Initialize percentage splits evenly
-      const evenPercentage = 100 / participants.length;
-      newSplits = participants.map((participant) => ({
+      const percentages = distributePercentage(100, participants.length);
+      newSplits = participants.map((participant, index) => ({
         userId: participant.id,
         name: participant.name,
         email: participant.email,
         imageUrl: participant.imageUrl,
-        amount: (amount * evenPercentage) / 100,
-        percentage: evenPercentage,
+        amount: 0,
+        percentage: percentages[index],
         paid: participant.id === paidByUserId,
       }));
+      newSplits = withAmountsFromPercentages(newSplits, amount);
     } else if (type === "exact") {
       // Initialize exact splits evenly
-      const evenAmount = amount / participants.length;
-      newSplits = participants.map((participant) => ({
+      const amounts = distributeAmount(amount, participants.length);
+      newSplits = participants.map((participant, index) => ({
         userId: participant.id,
         name: participant.name,
         email: participant.email,
         imageUrl: participant.imageUrl,
-        amount: evenAmount,
-        percentage: (evenAmount / amount) * 100,
+        amount: amounts[index],
+        percentage: amount > 0 ? (amounts[index] / amount) * 100 : 0,
         paid: participant.id === paidByUserId,
       }));
     }
 
-    setSplits(newSplits);
+    applySplits(newSplits);
+  }, [type, amount, participants, paidByUserId, applySplits]);
 
-    // Calculate totals
-    const newTotalAmount = newSplits.reduce(
-      (sum, split) => sum + split.amount,
-      0
-    );
-    const newTotalPercentage = newSplits.reduce(
-      (sum, split) => sum + split.percentage,
-      0
-    );
-
-    setTotalAmount(newTotalAmount);
-    setTotalPercentage(newTotalPercentage);
-
-    // Notify parent about the split changes
-    if (onSplitsChange) {
-      onSplitsChange(newSplits);
-    }
-  }, [type, amount, participants, paidByUserId, onSplitsChange]);
-
-  // Update the percentage splits - no automatic adjustment of other values
   const updatePercentageSplit = (userId, newPercentage) => {
-    // Update just this user's percentage and recalculate amount
+    if (!splits.length || amount <= 0) return;
+
+    const selectedPercentage = clamp(roundTo(Number(newPercentage) || 0, 1), 0, 100);
+    const otherSplits = splits.filter((split) => split.userId !== userId);
+    const remainingPercentages = distributePercentage(
+      100 - selectedPercentage,
+      otherSplits.length
+    );
+    let otherIndex = 0;
+
     const updatedSplits = splits.map((split) => {
       if (split.userId === userId) {
         return {
           ...split,
-          percentage: newPercentage,
-          amount: (amount * newPercentage) / 100,
+          percentage: selectedPercentage,
         };
       }
-      return split;
+
+      const percentage = remainingPercentages[otherIndex++] ?? 0;
+      return {
+        ...split,
+        percentage,
+      };
     });
 
-    setSplits(updatedSplits);
-
-    // Recalculate totals
-    const newTotalAmount = updatedSplits.reduce(
-      (sum, split) => sum + split.amount,
-      0
-    );
-    const newTotalPercentage = updatedSplits.reduce(
-      (sum, split) => sum + split.percentage,
-      0
-    );
-
-    setTotalAmount(newTotalAmount);
-    setTotalPercentage(newTotalPercentage);
-
-    // Notify parent about the split changes
-    if (onSplitsChange) {
-      onSplitsChange(updatedSplits);
-    }
+    applySplits(withAmountsFromPercentages(updatedSplits, amount));
   };
 
-  // Update the exact amount splits - no automatic adjustment of other values
   const updateExactSplit = (userId, newAmount) => {
-    const parsedAmount = parseFloat(newAmount) || 0;
+    if (!splits.length || amount <= 0) return;
 
-    // Update just this user's amount and recalculate percentage
+    const selectedAmount = clamp(
+      roundCurrency(parseFloat(newAmount) || 0),
+      0,
+      amount
+    );
+    const otherSplits = splits.filter((split) => split.userId !== userId);
+    const remainingAmounts = distributeAmount(
+      amount - selectedAmount,
+      otherSplits.length
+    );
+    let otherIndex = 0;
+
     const updatedSplits = splits.map((split) => {
       if (split.userId === userId) {
         return {
           ...split,
-          amount: parsedAmount,
-          percentage: amount > 0 ? (parsedAmount / amount) * 100 : 0,
+          amount: selectedAmount,
+          percentage: amount > 0 ? (selectedAmount / amount) * 100 : 0,
         };
       }
-      return split;
+
+      const nextAmount = remainingAmounts[otherIndex++] ?? 0;
+      return {
+        ...split,
+        amount: nextAmount,
+        percentage: amount > 0 ? (nextAmount / amount) * 100 : 0,
+      };
     });
 
-    setSplits(updatedSplits);
-
-    // Recalculate totals
-    const newTotalAmount = updatedSplits.reduce(
-      (sum, split) => sum + split.amount,
-      0
-    );
-    const newTotalPercentage = updatedSplits.reduce(
-      (sum, split) => sum + split.percentage,
-      0
-    );
-
-    setTotalAmount(newTotalAmount);
-    setTotalPercentage(newTotalPercentage);
-
-    // Notify parent about the split changes
-    if (onSplitsChange) {
-      onSplitsChange(updatedSplits);
-    }
+    applySplits(updatedSplits);
   };
 
   // Check if totals are valid
@@ -180,7 +175,7 @@ export function SplitSelector({
 
           {type === "equal" && (
             <div className="text-right text-sm">
-              Rs. {split.amount.toFixed(2)} ({split.percentage.toFixed(1)}%)
+              ₹{split.amount.toFixed(2)} ({split.percentage.toFixed(1)}%)
             </div>
           )}
 
@@ -211,7 +206,7 @@ export function SplitSelector({
                   className="w-16 h-8"
                 />
                 <span className="text-sm text-muted-foreground">%</span>
-                <span className="text-sm ml-1">Rs. {split.amount.toFixed(2)}</span>
+                <span className="text-sm ml-1">₹{split.amount.toFixed(2)}</span>
               </div>
             </div>
           )}
@@ -220,11 +215,11 @@ export function SplitSelector({
             <div className="flex items-center gap-2 flex-1">
               <div className="flex-1"></div>
               <div className="flex gap-1 items-center">
-                <span className="text-sm text-muted-foreground">Rs.</span>
+                <span className="text-sm text-muted-foreground">₹</span>
                 <Input
                   type="number"
                   min="0"
-                  max={amount * 2} // Allow values even higher than total for flexibility
+                  max={amount}
                   step="0.01"
                   value={split.amount.toFixed(2)}
                   onChange={(e) =>
@@ -248,7 +243,7 @@ export function SplitSelector({
           <span
             className={`font-medium ${!isAmountValid ? "text-amber-600" : ""}`}
           >
-            Rs. {totalAmount.toFixed(2)}
+            ₹{totalAmount.toFixed(2)}
           </span>
           {type !== "equal" && (
             <span
@@ -269,10 +264,66 @@ export function SplitSelector({
 
       {type === "exact" && !isAmountValid && (
         <div className="text-sm text-amber-600 mt-2">
-          The sum of all splits (Rs. {totalAmount.toFixed(2)}) should equal the
-          total amount (Rs. {amount.toFixed(2)}).
+          The sum of all splits (₹{totalAmount.toFixed(2)}) should equal the
+          total amount (₹{amount.toFixed(2)}).
         </div>
       )}
     </div>
   );
+}
+
+function distributeAmount(totalAmount, count) {
+  if (count <= 0) return [];
+
+  const totalCents = Math.round((Number(totalAmount) || 0) * 100);
+  const baseCents = Math.floor(totalCents / count);
+  const remainderCents = totalCents - baseCents * count;
+
+  return Array.from({ length: count }, (_, index) =>
+    (baseCents + (index < remainderCents ? 1 : 0)) / 100
+  );
+}
+
+function distributePercentage(totalPercentage, count) {
+  if (count <= 0) return [];
+
+  const totalTenths = Math.round((Number(totalPercentage) || 0) * 10);
+  const baseTenths = Math.floor(totalTenths / count);
+  const remainderTenths = totalTenths - baseTenths * count;
+
+  return Array.from({ length: count }, (_, index) =>
+    (baseTenths + (index < remainderTenths ? 1 : 0)) / 10
+  );
+}
+
+function withAmountsFromPercentages(splits, totalAmount) {
+  const nextSplits = splits.map((split) => ({
+    ...split,
+    amount: roundCurrency((totalAmount * split.percentage) / 100),
+  }));
+  const currentTotal = nextSplits.reduce((sum, split) => sum + split.amount, 0);
+  const difference = roundCurrency(totalAmount - currentTotal);
+
+  if (nextSplits.length > 0 && Math.abs(difference) > 0) {
+    const lastIndex = nextSplits.length - 1;
+    nextSplits[lastIndex] = {
+      ...nextSplits[lastIndex],
+      amount: roundCurrency(nextSplits[lastIndex].amount + difference),
+    };
+  }
+
+  return nextSplits;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundCurrency(value) {
+  return roundTo(value, 2);
+}
+
+function roundTo(value, decimals) {
+  const factor = 10 ** decimals;
+  return Math.round((Number(value) + Number.EPSILON) * factor) / factor;
 }

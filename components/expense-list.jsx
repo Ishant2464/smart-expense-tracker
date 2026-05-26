@@ -115,11 +115,19 @@ export function ExpenseList({
                 <div className="flex items-center gap-2">
                   <div className="text-right">
                     <div className="font-medium">
-                      ${expense.amount.toFixed(2)}
+                      ₹{expense.amount.toFixed(2)}
                     </div>
                     {isGroupExpense ? (
                       <Badge variant="outline" className="mt-1">
-                        Group expense
+                        {expense.groupName
+                          ? `Group: ${expense.groupName}`
+                          : "Group expense"}
+                      </Badge>
+                    ) : expense.groupId ? (
+                      <Badge variant="outline" className="mt-1">
+                        {expense.groupName
+                          ? `Group: ${expense.groupName}`
+                          : "Group expense"}
                       </Badge>
                     ) : (
                       <div className="text-sm text-muted-foreground">
@@ -175,7 +183,7 @@ export function ExpenseList({
                           </AvatarFallback>
                         </Avatar>
                         <span>
-                          {isCurrentUser ? "You" : splitUser.name}: $
+                          {isCurrentUser ? "You" : splitUser.name}: ₹
                           {split.amount.toFixed(2)}
                         </span>
                       </Badge>

@@ -86,7 +86,7 @@ export function SettlementList({
 
                 <div className="text-right">
                   <div className="font-medium">
-                    Rs. {settlement.amount.toFixed(2)}
+                    ₹{settlement.amount.toFixed(2)}
                   </div>
                   {isGroupSettlement ? (
                     <Badge variant="outline" className="mt-1">

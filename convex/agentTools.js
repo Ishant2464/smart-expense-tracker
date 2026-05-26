@@ -412,7 +412,7 @@ function roundMoney(amount) {
 }
 
 function formatCurrency(amount) {
-  return `Rs. ${roundMoney(amount).toFixed(2)}`;
+  return `₹${roundMoney(amount).toFixed(2)}`;
 }
 
 function escapeHtml(value) {

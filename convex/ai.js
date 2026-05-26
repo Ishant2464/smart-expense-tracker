@@ -1,9 +1,12 @@
 "use node";
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { v } from "convex/values";
-import { action, mutation } from "./_generated/server";
+import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import {
+  generateGeminiVisionText,
+  generateGroqText,
+} from "./aiProviders.js";
 
 const ALLOWED_CATEGORY_IDS = [
   "foodDrink",
@@ -103,7 +106,7 @@ export const parseNaturalLanguageExpense = action({
         group: participantContext.group,
       });
 
-      const modelText = await generateGeminiText(prompt);
+      const modelText = await generateGroqText(prompt);
       const parsed = parseJsonFromModel(modelText);
 
       if (!parsed.success) {
@@ -176,13 +179,6 @@ export const parseNaturalLanguageExpense = action({
         warnings
       );
     }
-  },
-});
-
-export const generateUploadUrl = mutation({
-  handler: async (ctx) => {
-    await ctx.runQuery(internal.users.getCurrentUser);
-    return await ctx.storage.generateUploadUrl();
   },
 });
 
@@ -416,58 +412,6 @@ ${input}
   `.trim();
 }
 
-async function generateGeminiText(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured.");
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-
-  if (typeof result.response.text === "function") {
-    return result.response.text();
-  }
-
-  return (
-    result.response.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? "")
-      .join("") ?? ""
-  );
-}
-
-async function generateGeminiVisionText({ prompt, imageBase64, mimeType }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured.");
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent([
-    { text: prompt },
-    {
-      inlineData: {
-        data: imageBase64,
-        mimeType,
-      },
-    },
-  ]);
-
-  if (typeof result.response.text === "function") {
-    return result.response.text();
-  }
-
-  return (
-    result.response.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? "")
-      .join("") ?? ""
-  );
-}
-
 function buildReceiptPrompt() {
   return `
 Extract expense details from this receipt or payment screenshot for Splitr, a finance app.
@@ -634,7 +578,7 @@ function buildReceiptNaturalLanguageSummary(extracted) {
   const category = getReceiptCategoryLabel(extracted.category);
   const dateText = extracted.rawDateText ? ` on ${extracted.rawDateText}` : "";
 
-  return `${extracted.description} ${category} for Rs. ${formatReceiptAmount(
+  return `${extracted.description} ${category} for ₹${formatReceiptAmount(
     extracted.amount
   )}${dateText}`;
 }

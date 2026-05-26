@@ -16,6 +16,7 @@ import type {
 import type * as agent from "../agent.js";
 import type * as agentTools from "../agentTools.js";
 import type * as ai from "../ai.js";
+import type * as aiProviders from "../aiProviders.js";
 import type * as chat from "../chat.js";
 import type * as contacts from "../contacts.js";
 import type * as dashboard from "../dashboard.js";
@@ -26,8 +27,10 @@ import type * as inngest from "../inngest.js";
 import type * as insights from "../insights.js";
 import type * as seed from "../seed.js";
 import type * as settlements from "../settlements.js";
+import type * as storage from "../storage.js";
 import type * as users from "../users.js";
 import type * as whatsapp from "../whatsapp.js";
+import type * as whatsappData from "../whatsappData.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -41,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   agent: typeof agent;
   agentTools: typeof agentTools;
   ai: typeof ai;
+  aiProviders: typeof aiProviders;
   chat: typeof chat;
   contacts: typeof contacts;
   dashboard: typeof dashboard;
@@ -51,8 +55,10 @@ declare const fullApi: ApiFromModules<{
   insights: typeof insights;
   seed: typeof seed;
   settlements: typeof settlements;
+  storage: typeof storage;
   users: typeof users;
   whatsapp: typeof whatsapp;
+  whatsappData: typeof whatsappData;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

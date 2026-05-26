@@ -6,7 +6,8 @@
 
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
 [![Convex](https://img.shields.io/badge/Convex-Real--time_Backend-orange)](https://www.convex.dev/)
-[![Gemini](https://img.shields.io/badge/Gemini-1.5_Flash-blue?logo=google)](https://ai.google.dev/)
+[![Groq](https://img.shields.io/badge/Groq-Text_AI-orange)](https://groq.com/)
+[![Gemini](https://img.shields.io/badge/Gemini-Vision-blue?logo=google)](https://ai.google.dev/)
 [![Clerk](https://img.shields.io/badge/Clerk-Auth-purple)](https://clerk.com/)
 [![Twilio](https://img.shields.io/badge/Twilio-WhatsApp-red?logo=twilio)](https://www.twilio.com/)
 [![Inngest](https://img.shields.io/badge/Inngest-Cron_Jobs-green)](https://www.inngest.com/)
@@ -71,7 +72,7 @@ Splitr is a full-stack, AI-native expense management platform that goes far beyo
 │  │         │                │                   │              │    │
 │  │         ▼                ▼                   ▼              │    │
 │  │  ┌──────────────────────────────────────────────────┐      │    │
-│  │  │              Gemini 1.5 Flash API                 │      │    │
+│  │  │       Groq Text API + Gemini Vision API            │      │    │
 │  │  │    (Text + Vision + Structured Output)            │      │    │
 │  │  └──────────────────────────────────────────────────┘      │    │
 │  └─────────────────────────────────────────────────────────────┘    │
@@ -118,7 +119,7 @@ Splitr is a full-stack, AI-native expense management platform that goes far beyo
 │  │  ├── GROUPS  → getGroupsForWhatsApp                          │    │
 │  │  ├── RECENT  → getRecentExpensesForWhatsApp                  │    │
 │  │  ├── HELP    → static help text                              │    │
-│  │  └── EXPENSE → Gemini parse → createExpenseForWhatsApp       │    │
+│  │  └── EXPENSE → Groq parse → createExpenseForWhatsApp         │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────┘
           │                                    │
@@ -129,7 +130,7 @@ Splitr is a full-stack, AI-native expense management platform that goes far beyo
 │ • Monthly AI     │              │ • Twilio WhatsApp    │
 │   Insights Email │              │ • Resend Email       │
 │ • Daily Payment  │              │ • Clerk Auth         │
-│   Reminders      │              │ • Gemini AI API      │
+│   Reminders      │              │ • Groq + Gemini APIs │
 └──────────────────┘              └──────────────────────┘
 ```
 
@@ -150,7 +151,7 @@ Type expenses in plain English — the AI handles the rest.
 Snap a photo, AI extracts everything.
 
 - Upload receipt photos or UPI payment screenshots
-- Gemini 1.5 Flash vision extracts: amount, merchant, category, date, itemized breakdown
+- Gemini vision extracts: amount, merchant, category, date, itemized breakdown
 - Auto-fills the NLP input for participant resolution
 - Supports JPEG, PNG, WebP, HEIC formats
 
@@ -187,7 +188,7 @@ Pre-computed analytics + AI interpretation.
 - **Server-side pre-computation**: category breakdowns, month-over-month deltas, 3-month rolling averages
 - **Anomaly detection**: flags categories at 1.5x (warning) and 2x (alert) their 3-month average
 - **Month-end projection**: estimates total based on current spending pace
-- **AI interpretation**: Gemini analyzes pre-computed data (doesn't do math)
+- **AI interpretation**: Groq analyzes pre-computed data (doesn't do math)
 - **In-app dashboard**: stat cards, progress bars, comparison tables, top expenses
 - **Monthly email reports**: automated via Inngest cron with rich HTML templates
 - **Enhanced payment reminders**: total owed, debt count, oldest debt age
@@ -212,7 +213,7 @@ Pre-computed analytics + AI interpretation.
 | **UI** | Tailwind CSS 4 + shadcn/ui + Radix | Component library with consistent design system |
 | **Auth** | Clerk | Authentication, user management, protected routes |
 | **Backend** | Convex | Real-time serverless database + functions |
-| **AI** | Gemini 1.5 Flash | NLP parsing, receipt OCR, agent responses, insights |
+| **AI** | Groq + Gemini Vision | NLP parsing, receipt OCR, agent responses, insights |
 | **WhatsApp** | Twilio | WhatsApp Business API integration |
 | **Email** | Resend | Transactional emails (insights, reminders) |
 | **Cron Jobs** | Inngest | Scheduled functions (monthly insights, daily reminders) |
@@ -299,7 +300,7 @@ splitr/
 
 - Node.js 18+
 - npm or yarn
-- Accounts on: [Convex](https://convex.dev), [Clerk](https://clerk.com), [Google AI Studio](https://ai.google.dev), [Twilio](https://twilio.com) (optional), [Resend](https://resend.com), [Inngest](https://inngest.com)
+- Accounts on: [Convex](https://convex.dev), [Clerk](https://clerk.com), [Groq](https://console.groq.com), [Google AI Studio](https://ai.google.dev), [Twilio](https://twilio.com) (optional), [Resend](https://resend.com), [Inngest](https://inngest.com)
 
 ### 1. Clone and Install
 
@@ -322,8 +323,13 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 CLERK_SECRET_KEY=your_clerk_secret_key
 CLERK_JWT_ISSUER_DOMAIN=your_clerk_jwt_issuer
 
-# Gemini AI
+# Groq text AI
+GROQ_API_KEY=your_groq_api_key
+GROQ_TEXT_MODEL=llama-3.1-8b-instant,llama-3.3-70b-versatile,meta-llama/llama-4-scout-17b-16e-instruct
+
+# Gemini vision OCR
 GEMINI_API_KEY=your_gemini_api_key
+GEMINI_VISION_MODEL=gemini-2.5-flash,gemini-2.5-flash-lite,gemini-flash-lite-latest
 
 # Resend (Email)
 RESEND_API_KEY=your_resend_api_key
@@ -338,7 +344,7 @@ INNGEST_EVENT_KEY=your_inngest_event_key
 INNGEST_SIGNING_KEY=your_inngest_signing_key
 ```
 
-Set `GEMINI_API_KEY` and `RESEND_API_KEY` in your **Convex dashboard** environment variables as well.
+Set `GROQ_API_KEY`, `GEMINI_API_KEY`, model variables, and `RESEND_API_KEY` in your **Convex dashboard** environment variables as well.
 
 ### 3. Initialize Convex
 
@@ -432,5 +438,5 @@ This project is for educational and portfolio purposes.
 ---
 
 <div align="center">
-  Built with ❤️ using Next.js, Convex, and Gemini AI
+  Built with ❤️ using Next.js, Convex, Groq, and Gemini Vision
 </div>

@@ -51,7 +51,7 @@ export default function LandingPage() {
         <div className="container mx-auto max-w-5xl overflow-hidden rounded-xl shadow-xl">
           <div className="gradient p-1 aspect-[16/9]">
             <Image
-              src="/hero.svg"
+              src="/hero.png"
               width={1280}
               height={720}
               alt="Banner"
