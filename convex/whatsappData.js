@@ -201,6 +201,9 @@ export const savePendingExpenseForWhatsApp = internalMutation({
   args: {
     userId: v.id("users"),
     messageBody: v.string(),
+    status: v.optional(v.string()),
+    parsedExpense: v.optional(v.any()),
+    groupId: v.optional(v.id("groups")),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -215,9 +218,30 @@ export const savePendingExpenseForWhatsApp = internalMutation({
     return await ctx.db.insert("pendingWhatsAppExpenses", {
       userId: args.userId,
       messageBody: args.messageBody,
+      status: args.status,
+      parsedExpense: args.parsedExpense,
+      groupId: args.groupId,
       createdAt: Date.now(),
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
+  },
+});
+
+export const savePendingParsedExpenseForWhatsApp = internalMutation({
+  args: {
+    pendingId: v.id("pendingWhatsAppExpenses"),
+    parsedExpense: v.any(),
+    groupId: v.optional(v.id("groups")),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.pendingId, {
+      status: "awaiting_confirmation",
+      parsedExpense: args.parsedExpense,
+      groupId: args.groupId,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+
+    return { success: true };
   },
 });
 

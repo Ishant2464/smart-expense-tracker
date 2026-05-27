@@ -90,6 +90,9 @@ export default defineSchema({
   pendingWhatsAppExpenses: defineTable({
     userId: v.id("users"),
     messageBody: v.string(),
+    status: v.optional(v.string()),
+    parsedExpense: v.optional(v.any()),
+    groupId: v.optional(v.id("groups")),
     createdAt: v.number(),
     expiresAt: v.number(),
   }).index("by_user", ["userId"]),

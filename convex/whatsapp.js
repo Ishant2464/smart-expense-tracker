@@ -32,6 +32,7 @@ const ALLOWED_CATEGORY_IDS = [
 
 const HIGH_CONFIDENCE_THRESHOLD = 0.85;
 const PENDING_SELECTION_REGEX = /^(?:(?:group\s*)?\d+|individual|personal|cancel)$/i;
+const CONFIRM_SELECTION_REGEX = /^(?:confirm|yes|y|add|create|cancel)$/i;
 
 export const processWhatsAppMessage = action({
   args: {
@@ -66,6 +67,21 @@ export const processWhatsAppMessage = action({
         internal.whatsappData.getPendingExpenseForWhatsApp,
         { userId: user._id }
       );
+
+      if (pending?.status === "awaiting_confirmation") {
+        if (CONFIRM_SELECTION_REGEX.test(messageBody)) {
+          return await handlePendingExpenseConfirmation(ctx, {
+            user,
+            pending,
+            messageBody,
+          });
+        }
+
+        return {
+          success: true,
+          reply: "Reply 'confirm' to add this expense, or 'cancel' to discard it.",
+        };
+      }
 
       if (pending && PENDING_SELECTION_REGEX.test(messageBody)) {
         return await handlePendingExpenseSelection(ctx, {
@@ -134,6 +150,45 @@ export const processWhatsAppMessage = action({
   },
 });
 
+async function handlePendingExpenseConfirmation(
+  ctx,
+  { user, pending, messageBody }
+) {
+  const text = messageBody.trim().toLowerCase();
+
+  if (text === "cancel") {
+    await ctx.runMutation(internal.whatsappData.clearPendingExpenseForWhatsApp, {
+      userId: user._id,
+    });
+    return { success: true, reply: "Cancelled that pending expense." };
+  }
+
+  if (!pending.parsedExpense) {
+    await ctx.runMutation(internal.whatsappData.clearPendingExpenseForWhatsApp, {
+      userId: user._id,
+    });
+    return {
+      success: false,
+      reply: "That pending expense expired. Please send the expense again.",
+    };
+  }
+
+  const expenseId = await createNormalizedWhatsAppExpense(ctx, {
+    user,
+    normalized: pending.parsedExpense,
+    groupId: pending.groupId,
+  });
+
+  await ctx.runMutation(internal.whatsappData.clearPendingExpenseForWhatsApp, {
+    userId: user._id,
+  });
+
+  return {
+    success: true,
+    reply: formatCreatedExpenseReply(pending.parsedExpense, expenseId),
+  };
+}
+
 async function handlePendingExpenseSelection(ctx, { user, pending, messageBody }) {
   const selection = normalizePendingSelection(messageBody);
 
@@ -163,6 +218,7 @@ async function handlePendingExpenseSelection(ctx, { user, pending, messageBody }
     user,
     messageBody: pending.messageBody,
     groupId: selectedGroup?.groupId,
+    pendingId: pending._id,
   });
 
   if (expenseResult.success) {
@@ -179,7 +235,7 @@ async function handlePendingExpenseSelection(ctx, { user, pending, messageBody }
 
 async function parseAndCreateExpenseForWhatsApp(
   ctx,
-  { user, messageBody, groupId }
+  { user, messageBody, groupId, pendingId }
 ) {
   const context = await ctx.runQuery(
     internal.whatsappData.getExpenseContextForWhatsApp,
@@ -208,16 +264,41 @@ async function parseAndCreateExpenseForWhatsApp(
     normalized.confidence < HIGH_CONFIDENCE_THRESHOLD ||
     normalized.requiresConfirmation
   ) {
+    if (pendingId) {
+      await ctx.runMutation(
+        internal.whatsappData.savePendingParsedExpenseForWhatsApp,
+        {
+          pendingId,
+          parsedExpense: normalized,
+          ...(groupId ? { groupId } : {}),
+        }
+      );
+    }
+
     return {
       success: false,
       reply:
         `I found an expense but need confirmation before adding it.\n` +
         `${normalized.description} - ${formatCurrency(normalized.amount)}\n` +
-        `Warnings: ${normalized.warnings.join(" ") || "low confidence"}`,
+        `Warnings: ${normalized.warnings.join(" ") || "low confidence"}\n` +
+        `Reply 'confirm' to add it, or 'cancel' to discard it.`,
     };
   }
 
-  const expenseId = await ctx.runMutation(
+  const expenseId = await createNormalizedWhatsAppExpense(ctx, {
+    user,
+    normalized,
+    groupId,
+  });
+
+  return {
+    success: true,
+    reply: formatCreatedExpenseReply(normalized, expenseId),
+  };
+}
+
+async function createNormalizedWhatsAppExpense(ctx, { user, normalized, groupId }) {
+  return await ctx.runMutation(
     internal.whatsappData.createExpenseForWhatsApp,
     {
       createdByUserId: user._id,
@@ -231,25 +312,21 @@ async function parseAndCreateExpenseForWhatsApp(
       ...(groupId ? { groupId } : {}),
     }
   );
+}
 
-  const payer = context.participants.find(
-    (participant) => participant.userId === normalized.paidByUserId
-  );
+function formatCreatedExpenseReply(normalized, expenseId) {
   const participantCount = normalized.participantUserIds.length;
   const eachAmount =
     normalized.splitType === "equal" && participantCount > 0
       ? normalized.amount / participantCount
       : null;
 
-  return {
-    success: true,
-    reply:
-      `Added: ${normalized.description} ${formatCurrency(normalized.amount)}\n` +
-      `Paid by: ${payer?.name ?? "Unknown"}\n` +
-      `Split: ${normalized.splitType} among ${participantCount} people` +
-      (eachAmount ? `\nEach: ${formatCurrency(eachAmount)}` : "") +
-      `\nExpense ID: ${expenseId}`,
-  };
+  return (
+    `Added: ${normalized.description} ${formatCurrency(normalized.amount)}\n` +
+    `Split: ${normalized.splitType} among ${participantCount} people` +
+    (eachAmount ? `\nEach: ${formatCurrency(eachAmount)}` : "") +
+    `\nExpense ID: ${expenseId}`
+  );
 }
 
 function detectIntent(messageBody) {
