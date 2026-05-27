@@ -31,6 +31,7 @@ const ALLOWED_CATEGORY_IDS = [
 ];
 
 const HIGH_CONFIDENCE_THRESHOLD = 0.85;
+const PENDING_SELECTION_REGEX = /^(?:(?:group\s*)?\d+|individual|personal|cancel)$/i;
 
 export const processWhatsAppMessage = action({
   args: {
@@ -61,6 +62,19 @@ export const processWhatsAppMessage = action({
     const intent = detectIntent(messageBody);
 
     try {
+      const pending = await ctx.runQuery(
+        internal.whatsappData.getPendingExpenseForWhatsApp,
+        { userId: user._id }
+      );
+
+      if (pending && PENDING_SELECTION_REGEX.test(messageBody)) {
+        return await handlePendingExpenseSelection(ctx, {
+          user,
+          pending,
+          messageBody,
+        });
+      }
+
       if (intent === "HELP") {
         return { success: true, reply: getHelpReply() };
       }
@@ -97,15 +111,19 @@ export const processWhatsAppMessage = action({
         return { success: true, reply: formatRecentExpensesReply(expenses) };
       }
 
-      const expenseResult = await parseAndCreateExpenseForWhatsApp(ctx, {
-        user,
+      await ctx.runMutation(internal.whatsappData.savePendingExpenseForWhatsApp, {
+        userId: user._id,
         messageBody,
-        groupId: user.defaultWhatsAppGroupId,
       });
 
+      const groups = await ctx.runQuery(
+        internal.whatsappData.getGroupsForWhatsApp,
+        { userId: user._id }
+      );
+
       return {
-        success: expenseResult.success,
-        reply: expenseResult.reply,
+        success: true,
+        reply: formatExpenseContextPrompt(messageBody, groups),
       };
     } catch (error) {
       return {
@@ -115,6 +133,49 @@ export const processWhatsAppMessage = action({
     }
   },
 });
+
+async function handlePendingExpenseSelection(ctx, { user, pending, messageBody }) {
+  const selection = normalizePendingSelection(messageBody);
+
+  if (selection.type === "cancel") {
+    await ctx.runMutation(internal.whatsappData.clearPendingExpenseForWhatsApp, {
+      userId: user._id,
+    });
+    return { success: true, reply: "Cancelled that pending expense." };
+  }
+
+  const groups = await ctx.runQuery(internal.whatsappData.getGroupsForWhatsApp, {
+    userId: user._id,
+  });
+  const selectedGroup =
+    selection.type === "group" ? groups[selection.index - 1] : null;
+
+  if (selection.type === "group" && !selectedGroup) {
+    return {
+      success: false,
+      reply:
+        `Please choose a valid option.\n` +
+        formatExpenseContextOptions(groups),
+    };
+  }
+
+  const expenseResult = await parseAndCreateExpenseForWhatsApp(ctx, {
+    user,
+    messageBody: pending.messageBody,
+    groupId: selectedGroup?.groupId,
+  });
+
+  if (expenseResult.success) {
+    await ctx.runMutation(internal.whatsappData.clearPendingExpenseForWhatsApp, {
+      userId: user._id,
+    });
+  }
+
+  return {
+    success: expenseResult.success,
+    reply: expenseResult.reply,
+  };
+}
 
 async function parseAndCreateExpenseForWhatsApp(
   ctx,
@@ -208,12 +269,38 @@ function getHelpReply() {
   return [
     "Splitr WhatsApp Commands:",
     "- Type any expense like: 'paid 200 for milk'",
+    "- After sending an expense, reply 'individual' or a group number to choose where to add it",
     "- 'balance' - check who owes you",
     "- 'summary' - monthly spending overview",
     "- 'groups' - list your groups",
     "- 'recent' - last 5 expenses",
     "- 'help' - show this message",
   ].join("\n");
+}
+
+function formatExpenseContextPrompt(messageBody, groups) {
+  return [
+    `Where should I add this expense?`,
+    `"${messageBody}"`,
+    "",
+    formatExpenseContextOptions(groups),
+  ].join("\n");
+}
+
+function formatExpenseContextOptions(groups) {
+  const lines = ["Reply with:", "- individual" ];
+
+  if (groups.length) {
+    lines.push(
+      ...groups.map(
+        (group, index) =>
+          `- ${index + 1} for ${group.name} (${group.memberCount} members)`
+      )
+    );
+  }
+
+  lines.push("- cancel");
+  return lines.join("\n");
 }
 
 function formatBalanceReply(balances) {
@@ -483,6 +570,20 @@ function extractJsonObject(text) {
 
 function normalizePhone(phone) {
   return String(phone ?? "").replace(/^whatsapp:/i, "").replace(/\s+/g, "").trim();
+}
+
+function normalizePendingSelection(messageBody) {
+  const text = messageBody.trim().toLowerCase();
+
+  if (text === "cancel") return { type: "cancel" };
+  if (text === "individual" || text === "personal") return { type: "individual" };
+
+  const match = text.match(/^(?:group\s*)?(\d+)$/);
+  if (match) {
+    return { type: "group", index: Number(match[1]) };
+  }
+
+  return { type: "unknown" };
 }
 
 function roundCurrency(value) {

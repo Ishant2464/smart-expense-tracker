@@ -176,6 +176,69 @@ export const getGroupsForWhatsApp = internalQuery({
   },
 });
 
+export const getPendingExpenseForWhatsApp = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const pending = await ctx.db
+      .query("pendingWhatsAppExpenses")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .first();
+
+    if (!pending) return null;
+
+    if (pending.expiresAt <= Date.now()) {
+      return null;
+    }
+
+    return pending;
+  },
+});
+
+export const savePendingExpenseForWhatsApp = internalMutation({
+  args: {
+    userId: v.id("users"),
+    messageBody: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("pendingWhatsAppExpenses")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const item of existing) {
+      await ctx.db.delete(item._id);
+    }
+
+    return await ctx.db.insert("pendingWhatsAppExpenses", {
+      userId: args.userId,
+      messageBody: args.messageBody,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+  },
+});
+
+export const clearPendingExpenseForWhatsApp = internalMutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("pendingWhatsAppExpenses")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    for (const item of existing) {
+      await ctx.db.delete(item._id);
+    }
+
+    return { success: true };
+  },
+});
+
 export const getRecentExpensesForWhatsApp = internalQuery({
   args: {
     userId: v.id("users"),

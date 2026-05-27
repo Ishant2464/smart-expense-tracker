@@ -86,4 +86,11 @@ export default defineSchema({
     toolResult: v.optional(v.string()),
     timestamp: v.number(),
   }).index("by_thread", ["threadId", "timestamp"]),
+
+  pendingWhatsAppExpenses: defineTable({
+    userId: v.id("users"),
+    messageBody: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

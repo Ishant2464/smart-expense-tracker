@@ -12,6 +12,11 @@ export async function POST(request) {
   const fallbackReply =
     "Sorry, Splitr could not process that message right now. Please try again later.";
 
+  console.info("WhatsApp webhook received", {
+    from: phone || "unknown",
+    body: body.slice(0, 80),
+  });
+
   try {
     if (!isValidTwilioRequest(request, formData)) {
       return new Response("Forbidden", { status: 403 });
@@ -30,8 +35,9 @@ export async function POST(request) {
     const reply = result?.reply || fallbackReply;
 
     await sendWhatsAppReply({ to: from, body: reply });
+    console.info("WhatsApp reply sent", { to: phone || "unknown" });
 
-    return new Response("OK", { status: 200 });
+    return new Response("", { status: 200 });
   } catch (error) {
     console.error("WhatsApp webhook failed:", error);
 
@@ -43,7 +49,7 @@ export async function POST(request) {
       console.error("Failed to send WhatsApp fallback reply:", sendError);
     }
 
-    return new Response("OK", { status: 200 });
+    return new Response("", { status: 200 });
   }
 }
 
