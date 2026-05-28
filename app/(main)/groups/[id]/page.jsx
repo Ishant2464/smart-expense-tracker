@@ -14,6 +14,7 @@ import { ExpenseList } from "@/components/expense-list";
 import { SettlementList } from "@/components/settlement-list";
 import { GroupBalances } from "@/components/group-balances";
 import { GroupMembers } from "@/components/group-members";
+import { SmartSettlementSuggestions } from "@/components/smart-settlement-suggestions";
 
 export default function GroupExpensesPage() {
   const params = useParams();
@@ -37,6 +38,7 @@ export default function GroupExpensesPage() {
   const expenses = data?.expenses || [];
   const settlements = data?.settlements || [];
   const balances = data?.balances || [];
+  const settlementSuggestions = data?.settlementSuggestions || [];
   const userLookupMap = data?.userLookupMap || {};
 
   return (
@@ -107,6 +109,18 @@ export default function GroupExpensesPage() {
           </Card>
         </div>
       </div>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl">Smart Settlement Suggestions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SmartSettlementSuggestions
+            groupId={params.id}
+            suggestions={settlementSuggestions}
+          />
+        </CardContent>
+      </Card>
 
       {/* Tabs for expenses and settlements */}
       <Tabs

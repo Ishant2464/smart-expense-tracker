@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -27,13 +28,18 @@ const settlementSchema = z.object({
 });
 
 export default function SettlementForm({ entityType, entityData, onSuccess }) {
+  const searchParams = useSearchParams();
   const { data: currentUser } = useConvexQuery(api.users.getCurrentUser);
   const createSettlement = useConvexMutation(api.settlements.createSettlement);
+  const initialMemberId = searchParams.get("memberId");
+  const initialAmount = searchParams.get("amount") ?? "";
+  const initialPaymentType = searchParams.get("paymentType");
 
   // Set up form with validation
   const {
     register,
     handleSubmit,
+    setValue,
     watch,
     formState: { errors, isSubmitting },
   } = useForm({
@@ -47,6 +53,16 @@ export default function SettlementForm({ entityType, entityData, onSuccess }) {
 
   // Get selected payment direction
   const paymentType = watch("paymentType");
+
+  useEffect(() => {
+    if (initialAmount) {
+      setValue("amount", initialAmount);
+    }
+
+    if (["youPaid", "theyPaid"].includes(initialPaymentType)) {
+      setValue("paymentType", initialPaymentType);
+    }
+  }, [initialAmount, initialPaymentType, setValue]);
 
   // Single user settlement
   const handleUserSettlement = async (data) => {
@@ -131,7 +147,13 @@ export default function SettlementForm({ entityType, entityData, onSuccess }) {
   };
 
   // For group settlements, we need to select a member
-  const [selectedGroupMemberId, setSelectedGroupMemberId] = useState(null);
+  const [selectedGroupMemberId, setSelectedGroupMemberId] = useState(initialMemberId);
+
+  useEffect(() => {
+    if (initialMemberId) {
+      setSelectedGroupMemberId(initialMemberId);
+    }
+  }, [initialMemberId]);
 
   if (!currentUser) return null;
 
@@ -172,14 +194,11 @@ export default function SettlementForm({ entityType, entityData, onSuccess }) {
         <div className="space-y-2">
           <Label>Who paid?</Label>
           <RadioGroup
-            defaultValue="youPaid"
+            value={paymentType}
             {...register("paymentType")}
             className="flex flex-col space-y-2"
             onValueChange={(value) => {
-              // This manual approach is needed because RadioGroup doesn't work directly with react-hook-form
-              register("paymentType").onChange({
-                target: { name: "paymentType", value },
-              });
+              setValue("paymentType", value);
             }}
           >
             <div className="flex items-center space-x-2 border rounded-md p-3">
@@ -216,7 +235,7 @@ export default function SettlementForm({ entityType, entityData, onSuccess }) {
         <div className="space-y-2">
           <Label htmlFor="amount">Amount</Label>
           <div className="relative">
-            <span className="absolute left-3 top-2.5">$</span>
+            <span className="absolute left-3 top-2.5">₹</span>
             <Input
               id="amount"
               placeholder="0.00"
@@ -315,13 +334,11 @@ export default function SettlementForm({ entityType, entityData, onSuccess }) {
             <div className="space-y-2">
               <Label>Who paid?</Label>
               <RadioGroup
-                defaultValue="youPaid"
+                value={paymentType}
                 {...register("paymentType")}
                 className="flex flex-col space-y-2"
                 onValueChange={(value) => {
-                  register("paymentType").onChange({
-                    target: { name: "paymentType", value },
-                  });
+                  setValue("paymentType", value);
                 }}
               >
                 <div className="flex items-center space-x-2 border rounded-md p-3">
@@ -385,7 +402,7 @@ export default function SettlementForm({ entityType, entityData, onSuccess }) {
             <div className="space-y-2">
               <Label htmlFor="amount">Amount</Label>
               <div className="relative">
-                <span className="absolute left-3 top-2.5">$</span>
+                <span className="absolute left-3 top-2.5">₹</span>
                 <Input
                   id="amount"
                   placeholder="0.00"

@@ -171,6 +171,11 @@ export const getGroupExpenses = query({
         .filter((other) => ledger[other][m.id] > 0)
         .map((other) => ({ from: other, amount: ledger[other][m.id] })),
     }));
+    const settlementSuggestions = buildSettlementSuggestions(
+      group._id,
+      balances,
+      userLookupMapFromMembers(memberDetails)
+    );
 
     const userLookupMap = {};
     memberDetails.forEach((member) => {
@@ -187,7 +192,63 @@ export const getGroupExpenses = query({
       expenses,
       settlements,
       balances,
+      settlementSuggestions,
       userLookupMap,
     };
   },
 });
+
+function buildSettlementSuggestions(groupId, balances, userLookupMap) {
+  const debtors = balances
+    .filter((member) => member.totalBalance < -0.01)
+    .map((member) => ({
+      userId: member.id,
+      amount: roundCurrency(Math.abs(member.totalBalance)),
+    }))
+    .sort((a, b) => b.amount - a.amount);
+  const creditors = balances
+    .filter((member) => member.totalBalance > 0.01)
+    .map((member) => ({
+      userId: member.id,
+      amount: roundCurrency(member.totalBalance),
+    }))
+    .sort((a, b) => b.amount - a.amount);
+  const suggestions = [];
+  let debtorIndex = 0;
+  let creditorIndex = 0;
+
+  while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
+    const debtor = debtors[debtorIndex];
+    const creditor = creditors[creditorIndex];
+    const amount = roundCurrency(Math.min(debtor.amount, creditor.amount));
+
+    if (amount > 0.01) {
+      suggestions.push({
+        groupId,
+        from: debtor.userId,
+        fromName: userLookupMap[debtor.userId]?.name ?? "Unknown",
+        fromImageUrl: userLookupMap[debtor.userId]?.imageUrl,
+        to: creditor.userId,
+        toName: userLookupMap[creditor.userId]?.name ?? "Unknown",
+        toImageUrl: userLookupMap[creditor.userId]?.imageUrl,
+        amount,
+      });
+    }
+
+    debtor.amount = roundCurrency(debtor.amount - amount);
+    creditor.amount = roundCurrency(creditor.amount - amount);
+
+    if (debtor.amount <= 0.01) debtorIndex++;
+    if (creditor.amount <= 0.01) creditorIndex++;
+  }
+
+  return suggestions;
+}
+
+function userLookupMapFromMembers(members) {
+  return Object.fromEntries(members.map((member) => [member.id, member]));
+}
+
+function roundCurrency(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
