@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { BarLoader } from "react-spinners";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -17,13 +17,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   CheckCircle2,
   MessageSquare,
   Phone,
@@ -32,34 +25,20 @@ import {
   XCircle,
 } from "lucide-react";
 
-const NO_GROUP_VALUE = "__none__";
 const BOT_NUMBER = process.env.NEXT_PUBLIC_TWILIO_WHATSAPP_NUMBER?.replace("whatsapp:", "") || "+1 415 523 8886";
+const TWILIO_SANDBOX_JOIN_CODE =
+  process.env.NEXT_PUBLIC_TWILIO_SANDBOX_JOIN_CODE || "join indicate-twelve";
 
 export default function SettingsPage() {
   const { data: currentUser, isLoading: isUserLoading } = useConvexQuery(
     api.users.getCurrentUser
   );
-  const { data: groups, isLoading: areGroupsLoading } = useConvexQuery(
-    api.dashboard.getUserGroups
-  );
   const updatePhone = useConvexMutation(api.users.updatePhone);
   const removePhone = useConvexMutation(api.users.removePhone);
-  const updateDefaultWhatsAppGroup = useConvexMutation(
-    api.users.updateDefaultWhatsAppGroup
-  );
   const [phoneInput, setPhoneInput] = useState("");
 
   const linkedPhone = currentUser?.phone;
   const isPhoneLinked = Boolean(linkedPhone);
-  const defaultGroupValue =
-    currentUser?.defaultWhatsAppGroupId ?? NO_GROUP_VALUE;
-  const sortedGroups = useMemo(
-    () =>
-      [...(groups ?? [])].sort((a, b) =>
-        String(a.name).localeCompare(String(b.name))
-      ),
-    [groups]
-  );
 
   useEffect(() => {
     if (!linkedPhone) {
@@ -96,20 +75,6 @@ export default function SettingsPage() {
       toast.success("WhatsApp number removed");
     } catch (error) {
       toast.error("Failed to remove WhatsApp number: " + error.message);
-    }
-  };
-
-  const handleDefaultGroupChange = async (value) => {
-    try {
-      if (value === NO_GROUP_VALUE) {
-        await updateDefaultWhatsAppGroup.mutate({});
-      } else {
-        await updateDefaultWhatsAppGroup.mutate({ groupId: value });
-      }
-
-      toast.success("Default WhatsApp group updated");
-    } catch (error) {
-      toast.error("Failed to update default group: " + error.message);
     }
   };
 
@@ -205,36 +170,30 @@ export default function SettingsPage() {
           {isPhoneLinked && (
             <section className="space-y-3 border-t pt-6">
               <div>
-                <h2 className="font-semibold">Default WhatsApp Group</h2>
+                <h2 className="font-semibold">Twilio Sandbox Setup</h2>
                 <p className="text-sm text-muted-foreground">
-                  Expenses sent via WhatsApp will be added to this group by
-                  default
+                  Each tester must join the Twilio WhatsApp Sandbox before the
+                  bot can reply to them.
                 </p>
               </div>
-
-              {areGroupsLoading ? (
-                <BarLoader width="100%" color="#36d7b7" />
-              ) : (
-                <Select
-                  value={defaultGroupValue}
-                  onValueChange={handleDefaultGroupChange}
-                  disabled={updateDefaultWhatsAppGroup.isLoading}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose a default group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_GROUP_VALUE}>
-                      No default group (individual expenses)
-                    </SelectItem>
-                    {sortedGroups.map((group) => (
-                      <SelectItem key={group.id ?? group._id} value={group.id}>
-                        {group.name} - {getMemberCount(group)} members
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Send this message</p>
+                  <p className="mt-1 rounded-md bg-background px-3 py-2 font-mono font-medium">
+                    {TWILIO_SANDBOX_JOIN_CODE}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">To this WhatsApp number</p>
+                  <p className="mt-1 rounded-md bg-background px-3 py-2 font-mono font-medium">
+                    {BOT_NUMBER}
+                  </p>
+                </div>
+                <p className="text-muted-foreground">
+                  After Twilio confirms the sandbox join, send "help" to start
+                  using Splitr from WhatsApp.
+                </p>
+              </div>
             </section>
           )}
 
@@ -242,10 +201,11 @@ export default function SettingsPage() {
             <h2 className="mb-3 font-semibold">How It Works</h2>
             <ol className="space-y-2 text-sm text-muted-foreground">
               <li>1. Link your WhatsApp number above.</li>
-              <li>2. Save the Splitr bot number: {BOT_NUMBER}</li>
-              <li>3. Send a message like "paid 200 for milk" to add expenses.</li>
-              <li>4. Type "balance" to check who owes you.</li>
-              <li>5. Type "help" for all available commands.</li>
+              <li>2. Join the Twilio Sandbox by sending "{TWILIO_SANDBOX_JOIN_CODE}" to {BOT_NUMBER}.</li>
+              <li>3. Send "help" to confirm the bot replies.</li>
+              <li>4. Send a message like "paid 200 for milk" to add expenses.</li>
+              <li>5. Reply with "individual" or a group number when the bot asks where to add it.</li>
+              <li>6. Type "balance", "groups", "recent", or "summary" anytime.</li>
             </ol>
           </section>
         </CardContent>
@@ -289,7 +249,3 @@ function isValidPhone(phone) {
   return phone.startsWith("+") && phone.replace(/\D/g, "").length >= 10;
 }
 
-function getMemberCount(group) {
-  if (Array.isArray(group.members)) return group.members.length;
-  return group.memberCount ?? 0;
-}

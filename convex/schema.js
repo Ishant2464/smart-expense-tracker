@@ -8,7 +8,6 @@ export default defineSchema({
     tokenIdentifier: v.string(),
     imageUrl: v.optional(v.string()),
     phone: v.optional(v.string()),
-    defaultWhatsAppGroupId: v.optional(v.id("groups")),
   })
     .index("by_token", ["tokenIdentifier"])
     .index("by_email", ["email"])

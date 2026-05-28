@@ -309,12 +309,12 @@ export const getExpenseContextForWhatsApp = internalQuery({
 
     if (args.groupId) {
       const group = await ctx.db.get(args.groupId);
-      if (!group) throw new Error("Default WhatsApp group not found");
+      if (!group) throw new Error("Selected WhatsApp group not found");
 
       const isMember = group.members.some(
         (member) => member.userId === args.userId
       );
-      if (!isMember) throw new Error("User is not a member of the default group");
+      if (!isMember) throw new Error("User is not a member of the selected group");
 
       const participants = [];
       for (const member of group.members) {

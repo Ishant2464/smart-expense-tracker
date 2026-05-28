@@ -461,7 +461,7 @@ Current user:
 - name: ${context.user.name}
 - userId: ${context.user.userId}
 
-${context.group ? `Default group: ${context.group.name}` : "No default group."}
+${context.group ? `Selected group: ${context.group.name}` : "Individual expense selected."}
 
 Available participants:
 ${context.participants
@@ -478,7 +478,7 @@ Rules:
 - Return strict JSON only.
 - Use only listed userId values.
 - If payer is ambiguous, use the current user.
-- If participants are ambiguous and a default group exists, use all group members.
+- If a group is selected, use all group members.
 - If participants are ambiguous and no group exists, use only the current user.
 - categoryId must be one of the allowed category IDs.
 - splitType must be "equal", "percentage", or "exact"; default to "equal".

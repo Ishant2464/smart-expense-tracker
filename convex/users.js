@@ -153,34 +153,6 @@ export const removePhone = mutation({
 
     await ctx.db.patch(currentUser._id, {
       phone: undefined,
-      defaultWhatsAppGroupId: undefined,
-    });
-
-    return { success: true };
-  },
-});
-
-export const updateDefaultWhatsAppGroup = mutation({
-  args: {
-    groupId: v.optional(v.id("groups")),
-  },
-  handler: async (ctx, args) => {
-    const currentUser = await ctx.runQuery(internal.users.getCurrentUser);
-
-    if (args.groupId) {
-      const group = await ctx.db.get(args.groupId);
-      if (!group) throw new Error("Group not found");
-
-      const isMember = group.members.some(
-        (member) => member.userId === currentUser._id
-      );
-      if (!isMember) {
-        throw new Error("You are not a member of this group.");
-      }
-    }
-
-    await ctx.db.patch(currentUser._id, {
-      defaultWhatsAppGroupId: args.groupId,
     });
 
     return { success: true };
