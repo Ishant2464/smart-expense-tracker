@@ -534,12 +534,14 @@ function normalizeParsedExpense(parsed, context) {
   const paidByUserId = participantMap.has(parsed.paidByUserId)
     ? parsed.paidByUserId
     : context.user.userId;
-  const participantUserIds = normalizeParticipantIds(
-    parsed.participantUserIds,
-    paidByUserId,
-    context,
-    warnings
-  );
+  const participantUserIds = context.group
+    ? context.participants.map((participant) => participant.userId)
+    : normalizeParticipantIds(
+        parsed.participantUserIds,
+        paidByUserId,
+        context,
+        warnings
+      );
   const category = ALLOWED_CATEGORY_IDS.includes(parsed.categoryId)
     ? parsed.categoryId
     : "other";
@@ -550,7 +552,9 @@ function normalizeParsedExpense(parsed, context) {
   const splitType = ["equal", "percentage", "exact"].includes(parsed.splitType)
     ? parsed.splitType
     : "equal";
-  if (splitType !== "equal") {
+  if (context.group && splitType !== "equal") {
+    warnings.push("Group WhatsApp expenses are split equally among all group members.");
+  } else if (splitType !== "equal") {
     warnings.push("Only equal WhatsApp splits are auto-created right now.");
   }
 
